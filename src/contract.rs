@@ -6,7 +6,7 @@ use crate::metadata::{read_decimal, read_name, read_symbol, write_metadata};
 #[cfg(test)]
 use crate::storage_types::{AllowanceDataKey, AllowanceValue};
 use crate::storage_types::{
-    DataKey, BALANCE_BUMP_AMOUNT, BALANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT,
+    DataKey, ProjectInfo, BALANCE_BUMP_AMOUNT, BALANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT,
     INSTANCE_LIFETIME_THRESHOLD,
 };
 use soroban_sdk::token::{self, Interface as _};
@@ -20,25 +20,35 @@ fn check_nonnegative_amount(amount: i128) {
     }
 }
 
-fn require_target_time_not_reached(e: &Env) {
-    let key = DataKey::TargetTimestamp;
-    let target_time: u64 = e.storage().persistent().get(&key).unwrap();
-    if e.ledger().timestamp() > target_time {
-        panic!("Target time reached")
+fn get_project_info(e: &Env) -> ProjectInfo {
+    let key = DataKey::ProjectInfo;
+    let project_info: ProjectInfo = e.storage().persistent().get(&key).unwrap();
+    return project_info;
+}
+
+fn require_start_time_reached(e: &Env) {
+    let start_time: u64 = get_project_info(e).start_timestamp;
+    if e.ledger().timestamp() < start_time {
+        panic!("Start time not reached")
     }
 }
 
-fn require_target_time_reached(e: &Env) {
-    let key = DataKey::TargetTimestamp;
-    let target_time: u64 = e.storage().persistent().get(&key).unwrap();
-    if e.ledger().timestamp() <= target_time {
-        panic!("Target time not reached")
+fn require_final_time_not_reached(e: &Env) {
+    let final_time: u64 = get_project_info(e).final_timestamp;
+    if e.ledger().timestamp() > final_time {
+        panic!("Final time reached")
+    }
+}
+
+fn require_final_time_reached(e: &Env) {
+    let final_time: u64 = get_project_info(e).final_timestamp;
+    if e.ledger().timestamp() <= final_time {
+        panic!("Final time not reached")
     }
 }
 
 fn require_target_amount_reached(e: &Env) {
-    let key = DataKey::TargetAmount;
-    let target_amount: i128 = e.storage().persistent().get(&key).unwrap();
+    let target_amount: i128 = get_project_info(e).target_amount;
     if read_total_supply(&e) < target_amount {
         panic!("Target amount not reached")
     }
@@ -134,9 +144,7 @@ fn _add_depositor(e: Env, depositor: Address) {
 pub struct Token;
 
 fn move_token(env: &Env, from: &Address, to: &Address, transfer_amount: i128) {
-    let token_key = DataKey::DepositTokenAddress;
-    let token = env.storage().persistent().get(&token_key).unwrap();
-
+    let token: Address = get_project_info(env).deposit_token_address;
     // token interface
     let token_client: token::TokenClient<'_> = token::Client::new(&env, &token);
     token_client.transfer(&from, to, &transfer_amount);
@@ -150,10 +158,7 @@ impl Token {
         decimal: u32,
         name: String,
         symbol: String,
-        beneficiary: Address,
-        deposit_token: Address,
-        target_amount: i128,
-        target_timestamp: u64,
+        project_info: ProjectInfo,
     ) {
         if has_administrator(&e) {
             panic!("already initialized")
@@ -172,28 +177,16 @@ impl Token {
             },
         );
 
-        let beneficiary_key = DataKey::Beneficiary;
-        e.storage().persistent().set(&beneficiary_key, &beneficiary);
-
-        let token_key = DataKey::DepositTokenAddress;
-        e.storage().persistent().set(&token_key, &deposit_token);
-
-        let target_amount_key = DataKey::TargetAmount;
-        e.storage()
-            .persistent()
-            .set(&target_amount_key, &target_amount);
-
-        let target_timestamp_key = DataKey::TargetTimestamp;
-        e.storage()
-            .persistent()
-            .set(&target_timestamp_key, &target_timestamp);
+        let project_key: DataKey = DataKey::ProjectInfo;
+        e.storage().persistent().set(&project_key, &project_info);
     }
 
     pub fn deposit(e: Env, depositor: Address, amount: i128) {
         check_nonnegative_amount(amount);
         depositor.require_auth();
 
-        require_target_time_not_reached(&e);
+        require_start_time_reached(&e);
+        require_final_time_not_reached(&e);
 
         move_token(&e, &depositor, &e.current_contract_address(), amount);
         _mint(e.clone(), depositor.clone(), amount);
@@ -208,24 +201,23 @@ impl Token {
         move_token(&e, &e.current_contract_address(), &depositor, amount);
     }
 
-    pub fn beneficiary_claim(e: Env) {
-        let beneficiary_key = DataKey::Beneficiary;
-        let beneficiary: Address = e.storage().persistent().get(&beneficiary_key).unwrap();
-        beneficiary.require_auth();
+    pub fn borrower_claim(e: Env) {
+        let borrower: Address = get_project_info(&e).borrower;
+        borrower.require_auth();
 
         require_target_amount_reached(&e);
-        require_target_time_reached(&e);
+        require_final_time_reached(&e);
 
         let amount: i128 = read_total_supply(&e);
-        move_token(&e, &e.current_contract_address(), &beneficiary, amount);
+        move_token(&e, &e.current_contract_address(), &borrower, amount);
     }
 
-    pub fn beneficiary_return(e: Env, beneficiary: Address, amount: i128) {
-        beneficiary.require_auth();
+    pub fn borrower_return(e: Env, borrower: Address, amount: i128) {
+        borrower.require_auth();
 
-        require_target_time_reached(&e);
+        require_final_time_reached(&e);
 
-        move_token(&e, &beneficiary, &e.current_contract_address(), amount);
+        move_token(&e, &borrower, &e.current_contract_address(), amount);
 
         // Calculation of proportional return
         let total_supply: i128 = read_total_supply(&e);

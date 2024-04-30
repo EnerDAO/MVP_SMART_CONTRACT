@@ -20,6 +20,18 @@ pub struct AllowanceValue {
     pub expiration_ledger: u32,
 }
 
+#[contracttype]
+pub struct ProjectInfo {
+    pub borrower: Address,
+    pub deposit_token_address: Address,
+    pub collateral_nft_address: Address,
+    pub collateral_id: u128,
+    pub target_amount: i128,
+    pub start_timestamp: u64,
+    pub final_timestamp: u64,
+    pub reward_rate: u32,
+}
+
 #[derive(Clone)]
 #[contracttype]
 pub enum DataKey {
@@ -28,10 +40,7 @@ pub enum DataKey {
     Nonce(Address),
     State(Address),
     Admin,
-    Beneficiary,
-    DepositTokenAddress,
-    TargetAmount,
-    TargetTimestamp,
+    ProjectInfo,
     TotalSupply,
     NumberOfDepositors,
     DepositorIndex(Address),
