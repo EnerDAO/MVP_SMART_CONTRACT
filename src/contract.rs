@@ -102,41 +102,41 @@ fn _burn(e: Env, from: Address, amount: i128) {
     TokenUtils::new(&e).events().burn(from, amount);
 }
 
-fn read_number_of_depositors(e: &Env) -> u128 {
-    let key = DataKey::NumberOfDepositors;
-    let number_of_depositors: u128 = e.storage().persistent().get(&key).unwrap_or(0);
-    number_of_depositors
+fn read_number_of_lenders(e: &Env) -> u128 {
+    let key = DataKey::NumberOflenders;
+    let number_of_lenders: u128 = e.storage().persistent().get(&key).unwrap_or(0);
+    number_of_lenders
 }
 
-fn write_number_of_depositors(e: &Env, val: u128) {
-    let key = DataKey::NumberOfDepositors;
+fn write_number_of_lenders(e: &Env, val: u128) {
+    let key = DataKey::NumberOflenders;
     e.storage().persistent().set(&key, &val);
     e.storage()
         .persistent()
         .extend_ttl(&key, BALANCE_LIFETIME_THRESHOLD, BALANCE_BUMP_AMOUNT);
 }
 
-// internal function that records index of the depositor
-// if this is a new depositor
-fn _add_depositor(e: Env, depositor: Address) {
-    let mut number_of_depositors: u128 = read_number_of_depositors(&e);
-    let mut depositor_index: u128 = e
+// internal function that records index of the lender
+// if this is a new lender
+fn _add_lender(e: Env, lender: Address) {
+    let mut number_of_lenders: u128 = read_number_of_lenders(&e);
+    let mut lender_index: u128 = e
         .storage()
         .persistent()
-        .get(&DataKey::DepositorIndex(depositor.clone()))
+        .get(&DataKey::lenderIndex(lender.clone()))
         .unwrap_or(0);
 
-    if depositor_index == 0 {
-        number_of_depositors += 1;
-        depositor_index = number_of_depositors;
-        write_number_of_depositors(&e, number_of_depositors);
+    if lender_index == 0 {
+        number_of_lenders += 1;
+        lender_index = number_of_lenders;
+        write_number_of_lenders(&e, number_of_lenders);
         e.storage().persistent().set(
-            &DataKey::DepositorIndex(depositor.clone()),
-            &depositor_index,
+            &DataKey::lenderIndex(lender.clone()),
+            &lender_index,
         );
         e.storage()
             .persistent()
-            .set(&DataKey::DepositorAddress(depositor_index), &depositor);
+            .set(&DataKey::lenderAddress(lender_index), &lender);
     }
 }
 
@@ -144,7 +144,7 @@ fn _add_depositor(e: Env, depositor: Address) {
 pub struct Token;
 
 fn move_token(env: &Env, from: &Address, to: &Address, transfer_amount: i128) {
-    let token: Address = get_project_info(env).deposit_token_address;
+    let token: Address = get_project_info(env).lend_token_address;
     // token interface
     let token_client: token::TokenClient<'_> = token::Client::new(&env, &token);
     token_client.transfer(&from, to, &transfer_amount);
@@ -181,24 +181,30 @@ impl Token {
         e.storage().persistent().set(&project_key, &project_info);
     }
 
-    pub fn deposit(e: Env, depositor: Address, amount: i128) {
+    pub fn lend(e: Env, lender: Address, amount: i128) {
         check_nonnegative_amount(amount);
-        depositor.require_auth();
+        lender.require_auth();
 
         require_start_time_reached(&e);
         require_final_time_not_reached(&e);
 
-        move_token(&e, &depositor, &e.current_contract_address(), amount);
-        _mint(e.clone(), depositor.clone(), amount);
-        _add_depositor(e.clone(), depositor.clone());
+        let target_amount: i128 = get_project_info(&e).target_amount;
+        let total_supply: i128 = read_total_supply(&e);
+        if total_supply + amount > target_amount {
+            panic!("Target amount overreached");
+        }
+
+        move_token(&e, &lender, &e.current_contract_address(), amount);
+        _mint(e.clone(), lender.clone(), amount);
+        _add_lender(e.clone(), lender.clone());
     }
 
-    pub fn withdraw(e: Env, depositor: Address, amount: i128) {
+    pub fn withdraw(e: Env, lender: Address, amount: i128) {
         check_nonnegative_amount(amount);
-        depositor.require_auth();
+        lender.require_auth();
 
-        _burn(e.clone(), depositor.clone(), amount);
-        move_token(&e, &e.current_contract_address(), &depositor, amount);
+        _burn(e.clone(), lender.clone(), amount);
+        move_token(&e, &e.current_contract_address(), &lender, amount);
     }
 
     pub fn borrower_claim(e: Env) {
@@ -221,13 +227,13 @@ impl Token {
 
         // Calculation of proportional return
         let total_supply: i128 = read_total_supply(&e);
-        let number_of_depositors: u128 = read_number_of_depositors(&e);
+        let number_of_lenders: u128 = read_number_of_lenders(&e);
 
-        for i in 1..=number_of_depositors {
+        for i in 1..=number_of_lenders {
             let user_address: Address = e
                 .storage()
                 .persistent()
-                .get(&DataKey::DepositorAddress(i))
+                .get(&DataKey::lenderAddress(i))
                 .unwrap();
             let user_part: i128 = amount * read_balance(&e, user_address.clone()) / total_supply;
             move_token(&e, &e.current_contract_address(), &user_address, user_part);
@@ -258,21 +264,21 @@ impl Token {
         read_total_supply(&e)
     }
 
-    pub fn number_of_depositors(e: Env) -> u128 {
-        read_number_of_depositors(&e)
+    pub fn number_of_lenders(e: Env) -> u128 {
+        read_number_of_lenders(&e)
     }
 
-    pub fn get_depositors(e: Env) -> Vec<Address> {
-        let mut depositors: Vec<Address> = Vec::<Address>::new(&e);
-        for i in 1..=read_number_of_depositors(&e) {
+    pub fn get_lenders(e: Env) -> Vec<Address> {
+        let mut lenders: Vec<Address> = Vec::<Address>::new(&e);
+        for i in 1..=read_number_of_lenders(&e) {
             let user_address: Address = e
                 .storage()
                 .persistent()
-                .get(&DataKey::DepositorAddress(i))
+                .get(&DataKey::lenderAddress(i))
                 .unwrap();
-            depositors.push_back(user_address);
+            lenders.push_back(user_address);
         }
-        depositors
+        lenders
     }
 
     #[cfg(test)]
@@ -325,7 +331,7 @@ impl token::Interface for Token {
 
         spend_balance(&e, from.clone(), amount);
         receive_balance(&e, to.clone(), amount);
-        _add_depositor(e.clone(), to.clone());
+        _add_lender(e.clone(), to.clone());
         TokenUtils::new(&e).events().transfer(from, to, amount);
     }
 
@@ -341,7 +347,7 @@ impl token::Interface for Token {
         spend_allowance(&e, from.clone(), spender, amount);
         spend_balance(&e, from.clone(), amount);
         receive_balance(&e, to.clone(), amount);
-        _add_depositor(e.clone(), to.clone());
+        _add_lender(e.clone(), to.clone());
         TokenUtils::new(&e).events().transfer(from, to, amount)
     }
 

@@ -23,7 +23,7 @@ pub struct AllowanceValue {
 #[contracttype]
 pub struct ProjectInfo {
     pub borrower: Address,
-    pub deposit_token_address: Address,
+    pub lend_token_address: Address,
     pub collateral_nft_address: Address,
     pub collateral_id: u128,
     pub target_amount: i128,
@@ -42,9 +42,9 @@ pub enum DataKey {
     Admin,
     ProjectInfo,
     TotalSupply,
-    NumberOfDepositors,
-    DepositorIndex(Address),
-    DepositorAddress(u128),
+    NumberOflenders,
+    lenderIndex(Address),
+    lenderAddress(u128),
     ReturnBalance(Address),
     TotalReturn,
 }

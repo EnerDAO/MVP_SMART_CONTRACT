@@ -36,7 +36,7 @@ fn create_token<'a>(e: &Env, admin: &Address) -> TokenClient<'a> {
     let random_address: Address = Address::generate(&e);
     let projectInfo = ProjectInfo {
         borrower: random_address.clone(),
-        deposit_token_address: random_address.clone(),
+        lend_token_address: random_address.clone(),
         collateral_nft_address: random_address.clone(),
         collateral_id: 0,
         target_amount: 0,
@@ -55,26 +55,26 @@ fn create_token<'a>(e: &Env, admin: &Address) -> TokenClient<'a> {
 }
 
 #[test]
-fn test_deposit() {
-    // Here we test usdt token deposit to the contract
+fn test_lend() {
+    // Here we test usdt token lend to the contract
     let e = Env::default();
     e.mock_all_auths();
 
     let admin = Address::generate(&e);
-    let depositor = Address::generate(&e);
-    let depositor_2 = Address::generate(&e);
+    let lender = Address::generate(&e);
+    let lender_2 = Address::generate(&e);
     let borrower = Address::generate(&e);
     let usdt_token = create_token(&e, &admin);
 
-    usdt_token.mint(&depositor, &3000_0000000i128);
-    usdt_token.mint(&depositor_2, &1000_0000000i128);
+    usdt_token.mint(&lender, &3000_0000000i128);
+    usdt_token.mint(&lender_2, &1000_0000000i128);
 
     let current_info: LedgerInfo = e.ledger().get();
     let current_timestamp: u64 = current_info.timestamp;
 
     let project_info = ProjectInfo {
         borrower: borrower.clone(),
-        deposit_token_address: usdt_token.address.clone(),
+        lend_token_address: usdt_token.address.clone(),
         collateral_nft_address: usdt_token.address.clone(),
         collateral_id: 0,
         target_amount: 3000_0000000i128,
@@ -93,34 +93,34 @@ fn test_deposit() {
     );
 
     assert_eq!(contract.total_supply(), 0);
-    assert_eq!(contract.balance(&depositor), 0);
-    assert_eq!(usdt_token.balance(&depositor), 3000_0000000i128);
-    assert_eq!(contract.number_of_depositors(), 0);
+    assert_eq!(contract.balance(&lender), 0);
+    assert_eq!(usdt_token.balance(&lender), 3000_0000000i128);
+    assert_eq!(contract.number_of_lenders(), 0);
 
-    contract.deposit(&depositor, &1000_0000000i128);
+    contract.lend(&lender, &1000_0000000i128);
 
     assert_eq!(contract.total_supply(), 1000_0000000i128);
-    assert_eq!(contract.balance(&depositor), 1000_0000000i128);
-    assert_eq!(usdt_token.balance(&depositor), 2000_0000000i128);
-    assert_eq!(contract.number_of_depositors(), 1);
+    assert_eq!(contract.balance(&lender), 1000_0000000i128);
+    assert_eq!(usdt_token.balance(&lender), 2000_0000000i128);
+    assert_eq!(contract.number_of_lenders(), 1);
 
-    contract.deposit(&depositor, &1000_0000000i128);
+    contract.lend(&lender, &1000_0000000i128);
 
     assert_eq!(contract.total_supply(), 2000_0000000i128);
-    assert_eq!(contract.balance(&depositor), 2000_0000000i128);
-    assert_eq!(usdt_token.balance(&depositor), 1000_0000000i128);
-    assert_eq!(contract.number_of_depositors(), 1);
+    assert_eq!(contract.balance(&lender), 2000_0000000i128);
+    assert_eq!(usdt_token.balance(&lender), 1000_0000000i128);
+    assert_eq!(contract.number_of_lenders(), 1);
 
-    contract.deposit(&depositor_2, &1000_0000000i128);
+    contract.lend(&lender_2, &1000_0000000i128);
 
     assert_eq!(contract.total_supply(), 3000_0000000i128);
-    assert_eq!(contract.balance(&depositor), 2000_0000000i128);
-    assert_eq!(usdt_token.balance(&depositor), 1000_0000000i128);
-    assert_eq!(contract.balance(&depositor_2), 1000_0000000i128);
-    assert_eq!(usdt_token.balance(&depositor_2), 0);
-    assert_eq!(contract.number_of_depositors(), 2);
+    assert_eq!(contract.balance(&lender), 2000_0000000i128);
+    assert_eq!(usdt_token.balance(&lender), 1000_0000000i128);
+    assert_eq!(contract.balance(&lender_2), 1000_0000000i128);
+    assert_eq!(usdt_token.balance(&lender_2), 0);
+    assert_eq!(contract.number_of_lenders(), 2);
 
-    assert_eq!(contract.get_depositors(), vec![&e, depositor, depositor_2]);
+    assert_eq!(contract.get_lenders(), vec![&e, lender, lender_2]);
 }
 
 // #[test]
@@ -130,13 +130,13 @@ fn test_deposit() {
 //     e.mock_all_auths();
 
 //     let admin = Address::generate(&e);
-//     let depositor = Address::generate(&e);
-//     let depositor_2 = Address::generate(&e);
+//     let lender = Address::generate(&e);
+//     let lender_2 = Address::generate(&e);
 //     let borrower = Address::generate(&e);
 //     let usdt_token = create_custom_token(&e, &admin, &7);
 
-//     usdt_token.mint(&depositor, &2000_0000000i128);
-//     usdt_token.mint(&depositor_2, &1000_0000000i128);
+//     usdt_token.mint(&lender, &2000_0000000i128);
+//     usdt_token.mint(&lender_2, &1000_0000000i128);
 
 //     let current_timestamp: u64 = std::time::SystemTime::now()
 //         .duration_since(std::time::SystemTime::UNIX_EPOCH)
@@ -156,26 +156,26 @@ fn test_deposit() {
 //     );
 
 //     assert_eq!(contract.total_supply(), 0);
-//     assert_eq!(contract.balance(&depositor), 0);
-//     assert_eq!(usdt_token.balance(&depositor), 2000_0000000i128);
-//     assert_eq!(contract.number_of_depositors(), 0);
+//     assert_eq!(contract.balance(&lender), 0);
+//     assert_eq!(usdt_token.balance(&lender), 2000_0000000i128);
+//     assert_eq!(contract.number_of_lenders(), 0);
 
-//     contract.deposit(&depositor, &2000_0000000i128);
+//     contract.lend(&lender, &2000_0000000i128);
 
 //     assert_eq!(contract.total_supply(), 2000_0000000i128);
-//     assert_eq!(contract.balance(&depositor), 2000_0000000i128);
-//     assert_eq!(usdt_token.balance(&depositor), 0);
-//     assert_eq!(contract.number_of_depositors(), 1);
+//     assert_eq!(contract.balance(&lender), 2000_0000000i128);
+//     assert_eq!(usdt_token.balance(&lender), 0);
+//     assert_eq!(contract.number_of_lenders(), 1);
 
-//     contract.deposit(&depositor_2, &1000_0000000i128);
+//     contract.lend(&lender_2, &1000_0000000i128);
 
 //     assert_eq!(usdt_token.balance(&contract.address), 3000_0000000i128);
 //     assert_eq!(contract.total_supply(), 3000_0000000i128);
-//     assert_eq!(contract.balance(&depositor), 2000_0000000i128);
-//     assert_eq!(usdt_token.balance(&depositor), 0);
-//     assert_eq!(contract.balance(&depositor_2), 1000_0000000i128);
-//     assert_eq!(usdt_token.balance(&depositor_2), 0);
-//     assert_eq!(contract.number_of_depositors(), 2);
+//     assert_eq!(contract.balance(&lender), 2000_0000000i128);
+//     assert_eq!(usdt_token.balance(&lender), 0);
+//     assert_eq!(contract.balance(&lender_2), 1000_0000000i128);
+//     assert_eq!(usdt_token.balance(&lender_2), 0);
+//     assert_eq!(contract.number_of_lenders(), 2);
 
 //     let mut current_info: LedgerInfo = e.ledger().get();
 //     current_info.timestamp = current_timestamp + 1001_u64;
@@ -191,8 +191,8 @@ fn test_deposit() {
 //     contract.borrower_return(&borrower, &1500_0000000i128);
 
 //     assert_eq!(usdt_token.balance(&borrower), 0);
-//     assert_eq!(contract.balance(&depositor), 2000_0000000i128);
-//     assert_eq!(contract.balance(&depositor_2), 1000_0000000i128);
+//     assert_eq!(contract.balance(&lender), 2000_0000000i128);
+//     assert_eq!(contract.balance(&lender_2), 1000_0000000i128);
 // }
 
 // #[test]
@@ -234,9 +234,9 @@ fn test_deposit() {
 
 //     e.budget().reset_unlimited();
 //     for _ in 0..10 {
-//         let depositor = Address::generate(&e);
-//         usdt_token.mint(&depositor, &1000_0000000i128);
-//         contract.deposit(&depositor, &1000_0000000i128);
+//         let lender = Address::generate(&e);
+//         usdt_token.mint(&lender, &1000_0000000i128);
+//         contract.lend(&lender, &1000_0000000i128);
 //     }
 
 //     assert_eq!(usdt_token.balance(&contract.address), 10_000_0000000i128);
@@ -250,7 +250,7 @@ fn test_deposit() {
 //     e.budget().reset_unlimited();
 //     contract.borrower_return(&borrower, &1000_0000000i128);
 //     println!(
-//         "      return to 10 depositors: {:?}",
+//         "      return to 10 lenders: {:?}",
 //         e.budget().cpu_instruction_cost()
 //     );
 // }
