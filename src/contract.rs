@@ -14,6 +14,9 @@ use soroban_sdk::{contract, contractimpl, Address, Env, String, Vec};
 use soroban_token_sdk::metadata::TokenMetadata;
 use soroban_token_sdk::TokenUtils;
 
+const PROTOCOL_FEE: i128 = 1000;
+const REWARD_DENOM: i128 = 10000;
+
 fn check_nonnegative_amount(amount: i128) {
     if amount < 0 {
         panic!("negative amount is not allowed: {}", amount)
@@ -103,13 +106,13 @@ fn _burn(e: Env, from: Address, amount: i128) {
 }
 
 fn read_number_of_lenders(e: &Env) -> u128 {
-    let key = DataKey::NumberOflenders;
+    let key = DataKey::NumberOfLenders;
     let number_of_lenders: u128 = e.storage().persistent().get(&key).unwrap_or(0);
     number_of_lenders
 }
 
 fn write_number_of_lenders(e: &Env, val: u128) {
-    let key = DataKey::NumberOflenders;
+    let key = DataKey::NumberOfLenders;
     e.storage().persistent().set(&key, &val);
     e.storage()
         .persistent()
@@ -123,7 +126,7 @@ fn _add_lender(e: Env, lender: Address) {
     let mut lender_index: u128 = e
         .storage()
         .persistent()
-        .get(&DataKey::lenderIndex(lender.clone()))
+        .get(&DataKey::LenderIndex(lender.clone()))
         .unwrap_or(0);
 
     if lender_index == 0 {
@@ -131,12 +134,12 @@ fn _add_lender(e: Env, lender: Address) {
         lender_index = number_of_lenders;
         write_number_of_lenders(&e, number_of_lenders);
         e.storage().persistent().set(
-            &DataKey::lenderIndex(lender.clone()),
+            &DataKey::LenderIndex(lender.clone()),
             &lender_index,
         );
         e.storage()
             .persistent()
-            .set(&DataKey::lenderAddress(lender_index), &lender);
+            .set(&DataKey::LenderAddress(lender_index), &lender);
     }
 }
 
@@ -199,12 +202,14 @@ impl Token {
         _add_lender(e.clone(), lender.clone());
     }
 
-    pub fn withdraw(e: Env, lender: Address, amount: i128) {
-        check_nonnegative_amount(amount);
+    pub fn lender_claim(e: Env, lender: Address) {
         lender.require_auth();
-
-        _burn(e.clone(), lender.clone(), amount);
-        move_token(&e, &e.current_contract_address(), &lender, amount);
+        // TODO claimed balance
+        let entitled_amount: i128 = 0;
+        _burn(e.clone(), lender.clone(), entitled_amount);
+        let reward_rate = get_project_info(&e).reward_rate;
+        let amount_with_rewards = entitled_amount * reward_rate / REWARD_DENOM;
+        move_token(&e, &e.current_contract_address(), &lender, amount_with_rewards);
     }
 
     pub fn borrower_claim(e: Env) {
@@ -233,7 +238,7 @@ impl Token {
             let user_address: Address = e
                 .storage()
                 .persistent()
-                .get(&DataKey::lenderAddress(i))
+                .get(&DataKey::LenderAddress(i))
                 .unwrap();
             let user_part: i128 = amount * read_balance(&e, user_address.clone()) / total_supply;
             move_token(&e, &e.current_contract_address(), &user_address, user_part);
@@ -274,7 +279,7 @@ impl Token {
             let user_address: Address = e
                 .storage()
                 .persistent()
-                .get(&DataKey::lenderAddress(i))
+                .get(&DataKey::LenderAddress(i))
                 .unwrap();
             lenders.push_back(user_address);
         }
@@ -299,18 +304,19 @@ impl token::Interface for Token {
     }
 
     fn approve(e: Env, from: Address, spender: Address, amount: i128, expiration_ledger: u32) {
-        from.require_auth();
+        panic!("Not allowed!");
+        // from.require_auth();
 
-        check_nonnegative_amount(amount);
+        // check_nonnegative_amount(amount);
 
-        e.storage()
-            .instance()
-            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        // e.storage()
+        //     .instance()
+        //     .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
 
-        write_allowance(&e, from.clone(), spender.clone(), amount, expiration_ledger);
-        TokenUtils::new(&e)
-            .events()
-            .approve(from, spender, amount, expiration_ledger);
+        // write_allowance(&e, from.clone(), spender.clone(), amount, expiration_ledger);
+        // TokenUtils::new(&e)
+        //     .events()
+        //     .approve(from, spender, amount, expiration_ledger);
     }
 
     fn balance(e: Env, id: Address) -> i128 {
@@ -321,34 +327,36 @@ impl token::Interface for Token {
     }
 
     fn transfer(e: Env, from: Address, to: Address, amount: i128) {
-        from.require_auth();
+        panic!("Not allowed!");
+        // from.require_auth();
 
-        check_nonnegative_amount(amount);
+        // check_nonnegative_amount(amount);
 
-        e.storage()
-            .instance()
-            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        // e.storage()
+        //     .instance()
+        //     .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
 
-        spend_balance(&e, from.clone(), amount);
-        receive_balance(&e, to.clone(), amount);
-        _add_lender(e.clone(), to.clone());
-        TokenUtils::new(&e).events().transfer(from, to, amount);
+        // spend_balance(&e, from.clone(), amount);
+        // receive_balance(&e, to.clone(), amount);
+        // _add_lender(e.clone(), to.clone());
+        // TokenUtils::new(&e).events().transfer(from, to, amount);
     }
 
     fn transfer_from(e: Env, spender: Address, from: Address, to: Address, amount: i128) {
-        spender.require_auth();
+        panic!("Not allowed!");
+        // spender.require_auth();
 
-        check_nonnegative_amount(amount);
+        // check_nonnegative_amount(amount);
 
-        e.storage()
-            .instance()
-            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        // e.storage()
+        //     .instance()
+        //     .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
 
-        spend_allowance(&e, from.clone(), spender, amount);
-        spend_balance(&e, from.clone(), amount);
-        receive_balance(&e, to.clone(), amount);
-        _add_lender(e.clone(), to.clone());
-        TokenUtils::new(&e).events().transfer(from, to, amount)
+        // spend_allowance(&e, from.clone(), spender, amount);
+        // spend_balance(&e, from.clone(), amount);
+        // receive_balance(&e, to.clone(), amount);
+        // _add_lender(e.clone(), to.clone());
+        // TokenUtils::new(&e).events().transfer(from, to, amount)
     }
 
     fn burn(e: Env, from: Address, amount: i128) {
@@ -363,12 +371,13 @@ impl token::Interface for Token {
     }
 
     fn burn_from(e: Env, spender: Address, from: Address, amount: i128) {
-        spender.require_auth();
+        panic!("Not allowed!");
+        // spender.require_auth();
 
-        check_nonnegative_amount(amount);
+        // check_nonnegative_amount(amount);
 
-        spend_allowance(&e, from.clone(), spender, amount);
-        _burn(e, from, amount);
+        // spend_allowance(&e, from.clone(), spender, amount);
+        // _burn(e, from, amount);
     }
 
     fn decimals(e: Env) -> u32 {

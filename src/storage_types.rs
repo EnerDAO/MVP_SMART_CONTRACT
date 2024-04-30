@@ -29,7 +29,7 @@ pub struct ProjectInfo {
     pub target_amount: i128,
     pub start_timestamp: u64,
     pub final_timestamp: u64,
-    pub reward_rate: u32,
+    pub reward_rate: i128,
 }
 
 #[derive(Clone)]
@@ -42,9 +42,9 @@ pub enum DataKey {
     Admin,
     ProjectInfo,
     TotalSupply,
-    NumberOflenders,
-    lenderIndex(Address),
-    lenderAddress(u128),
+    NumberOfLenders,
+    LenderIndex(Address),
+    LenderAddress(u128),
     ReturnBalance(Address),
     TotalReturn,
 }
