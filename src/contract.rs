@@ -17,6 +17,12 @@ use soroban_token_sdk::TokenUtils;
 const PROTOCOL_FEE: i128 = 1000;
 const REWARD_DENOM: i128 = 10000;
 
+mod contract_nft {
+    soroban_sdk::contractimport!(
+        file = "./token/non_fungible_token.optimized.wasm"
+    );
+}
+
 fn check_nonnegative_amount(amount: i128) {
     if amount < 0 {
         panic!("negative amount is not allowed: {}", amount)
@@ -56,6 +62,18 @@ fn require_target_amount_reached(e: &Env) {
         panic!("Target amount not reached")
     }
 }
+
+fn require_nft_collateral(e: &Env) {
+    let collateral_nft_address: Address = get_project_info(e).collateral_nft_address;
+    let collateral_id: u128 = get_project_info(e).collateral_id;
+    // owner_of() &e.current_contract_address()
+    let nft_client = contract_nft::Client::new(&e, &collateral_nft_address);
+    let nft_owner: Address = nft_client.owner_of(&collateral_id);
+    if nft_owner != e.current_contract_address() {
+        panic!("No collateral nft")
+    }
+}
+
 
 fn read_total_supply(e: &Env) -> i128 {
     let key = DataKey::TotalSupply;
@@ -133,10 +151,9 @@ fn _add_lender(e: Env, lender: Address) {
         number_of_lenders += 1;
         lender_index = number_of_lenders;
         write_number_of_lenders(&e, number_of_lenders);
-        e.storage().persistent().set(
-            &DataKey::LenderIndex(lender.clone()),
-            &lender_index,
-        );
+        e.storage()
+            .persistent()
+            .set(&DataKey::LenderIndex(lender.clone()), &lender_index);
         e.storage()
             .persistent()
             .set(&DataKey::LenderAddress(lender_index), &lender);
@@ -144,7 +161,7 @@ fn _add_lender(e: Env, lender: Address) {
 }
 
 #[contract]
-pub struct Token;
+pub struct EnerDAOToken;
 
 fn move_token(env: &Env, from: &Address, to: &Address, transfer_amount: i128) {
     let token: Address = get_project_info(env).lend_token_address;
@@ -154,7 +171,7 @@ fn move_token(env: &Env, from: &Address, to: &Address, transfer_amount: i128) {
 }
 
 #[contractimpl]
-impl Token {
+impl EnerDAOToken {
     pub fn initialize(
         e: Env,
         admin: Address,
@@ -202,14 +219,59 @@ impl Token {
         _add_lender(e.clone(), lender.clone());
     }
 
+    
+    pub fn is_lender_claim_available(e: &Env) -> bool {
+        let key: DataKey = DataKey::ClaimAvailable;
+        let claim_available: bool = e.storage().persistent().get(&key).unwrap_or(false);
+        return claim_available;
+    }
+
+    pub fn lender_available_to_claim(e: Env, lender: Address) -> i128 {
+        if !Self::is_lender_claim_available(&e) {
+            return 0;
+        }
+        let key_claimed: DataKey = DataKey::ClaimedBalance(lender.clone());
+        let already_claimed: i128 = e.storage().persistent().get(&key_claimed).unwrap_or(0);
+
+        let key_return: DataKey = DataKey::TotalReturn;
+        let total_return: i128 = e.storage().persistent().get(&key_return).unwrap_or(0);
+
+        let lender_balance: i128 = read_balance(&e, lender.clone());
+
+        let target_amount: i128 = get_project_info(&e).target_amount;
+
+        let total_available_to_claim: i128 = total_return * (lender_balance + already_claimed) / target_amount;
+
+        let reward_rate: i128 = get_project_info(&e).reward_rate;
+
+        return total_available_to_claim - already_claimed * (reward_rate + REWARD_DENOM) / REWARD_DENOM;
+    }
+
     pub fn lender_claim(e: Env, lender: Address) {
         lender.require_auth();
-        // TODO claimed balance
-        let entitled_amount: i128 = 0;
-        _burn(e.clone(), lender.clone(), entitled_amount);
-        let reward_rate = get_project_info(&e).reward_rate;
-        let amount_with_rewards = entitled_amount * reward_rate / REWARD_DENOM;
-        move_token(&e, &e.current_contract_address(), &lender, amount_with_rewards);
+        
+        let entitled_amount: i128 = Self::lender_available_to_claim(e.clone(), lender.clone());
+
+        if entitled_amount <= 0 {
+            panic!("Nothing to claim");
+        }
+        
+        let reward_rate: i128 = get_project_info(&e).reward_rate;
+        let burn_amount: i128 = entitled_amount * REWARD_DENOM / (REWARD_DENOM + reward_rate);
+
+        _burn(e.clone(), lender.clone(), burn_amount);
+
+        move_token(
+            &e,
+            &e.current_contract_address(),
+            &lender,
+            entitled_amount,
+        );
+
+        let key_claimed: DataKey = DataKey::ClaimedBalance(lender.clone());
+        let mut already_claimed: i128 = e.storage().persistent().get(&key_claimed).unwrap_or(0);
+        already_claimed += burn_amount;
+        e.storage().persistent().set(&key_claimed, &already_claimed);
     }
 
     pub fn borrower_claim(e: Env) {
@@ -218,6 +280,7 @@ impl Token {
 
         require_target_amount_reached(&e);
         require_final_time_reached(&e);
+        require_nft_collateral(&e);
 
         let amount: i128 = read_total_supply(&e);
         move_token(&e, &e.current_contract_address(), &borrower, amount);
@@ -230,19 +293,24 @@ impl Token {
 
         move_token(&e, &borrower, &e.current_contract_address(), amount);
 
-        // Calculation of proportional return
-        let total_supply: i128 = read_total_supply(&e);
-        let number_of_lenders: u128 = read_number_of_lenders(&e);
+        // Calculation of protocol fee
+        let reward_rate: i128 = get_project_info(&e).reward_rate;
+        let base_return: i128 = amount * REWARD_DENOM / (REWARD_DENOM + reward_rate + reward_rate * PROTOCOL_FEE / REWARD_DENOM);
+        let protocol_fee: i128 = amount - base_return - base_return * reward_rate / REWARD_DENOM;
 
-        for i in 1..=number_of_lenders {
-            let user_address: Address = e
-                .storage()
-                .persistent()
-                .get(&DataKey::LenderAddress(i))
-                .unwrap();
-            let user_part: i128 = amount * read_balance(&e, user_address.clone()) / total_supply;
-            move_token(&e, &e.current_contract_address(), &user_address, user_part);
-        }
+        
+        let key_return: DataKey = DataKey::TotalReturn;
+        let mut total_return: i128 = e.storage().persistent().get(&key_return).unwrap_or(0);
+        total_return += amount - protocol_fee;
+        e.storage().persistent().set(&key_return, &total_return);
+
+        let key_fee: DataKey = DataKey::FeeAccumulated;
+        let mut total_fee = e.storage().persistent().get(&key_fee).unwrap_or(0);
+        total_fee += protocol_fee;
+        e.storage().persistent().set(&key_fee, &total_fee);
+
+        let key_claim: DataKey = DataKey::ClaimAvailable;
+        e.storage().persistent().set(&key_claim, &true);
     }
 
     pub fn mint(e: Env, to: Address, amount: i128) {
@@ -295,7 +363,7 @@ impl Token {
 }
 
 #[contractimpl]
-impl token::Interface for Token {
+impl token::Interface for EnerDAOToken {
     fn allowance(e: Env, from: Address, spender: Address) -> i128 {
         e.storage()
             .instance()

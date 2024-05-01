@@ -9,4 +9,4 @@ mod storage_types;
 mod test;
 // mod test_token;
 
-pub use crate::contract::TokenClient;
+pub use crate::contract::EnerDAOTokenClient;

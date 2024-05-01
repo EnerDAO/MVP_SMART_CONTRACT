@@ -45,6 +45,8 @@ pub enum DataKey {
     NumberOfLenders,
     LenderIndex(Address),
     LenderAddress(u128),
-    ReturnBalance(Address),
+    ClaimAvailable,
+    ClaimedBalance(Address),
     TotalReturn,
+    FeeAccumulated,
 }
