@@ -333,6 +333,19 @@ impl EnerDAOToken {
         TokenUtils::new(&e).events().set_admin(admin, new_admin);
     }
 
+    pub fn set_project_info(e: Env, new_project_info: ProjectInfo) {
+        let admin = read_administrator(&e);
+        admin.require_auth();
+
+        let project_key: DataKey = DataKey::ProjectInfo;
+        e.storage().persistent().set(&project_key, &new_project_info);
+    }
+
+    pub fn set_lender_claim_available(e: Env, is_available: bool) {
+        let key_claim: DataKey = DataKey::ClaimAvailable;
+        e.storage().persistent().set(&key_claim, &is_available);
+    }
+        
     pub fn total_supply(e: Env) -> i128 {
         read_total_supply(&e)
     }
