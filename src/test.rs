@@ -196,6 +196,69 @@ fn test_borrower_return() {
     assert_eq!(contract.lender_available_to_claim(&lender_2), 1100_0000000i128);
 }
 
+
+#[test]
+fn test_borrower_return_rounding() {
+    // Here we test eurc borrower return to the contract
+    let e = Env::default();
+    e.mock_all_auths();
+
+    let admin = Address::generate(&e);
+    let lender = Address::generate(&e);
+    let lender_2 = Address::generate(&e);
+    let borrower = Address::generate(&e);
+    let eurc_token = create_custom_token(&e, &admin, &7);
+
+    eurc_token.mint(&lender, &2000_0000000i128);
+    eurc_token.mint(&lender_2, &1000_0000000i128);
+
+    let nft = create_nft(&e, &admin);
+    
+
+    let current_info: LedgerInfo = e.ledger().get();
+    let current_timestamp: u64 = current_info.timestamp;
+
+    let project_info = ProjectInfo {
+        borrower: borrower.clone(),
+        lend_token_address: eurc_token.address.clone(),
+        collateral_nft_address: nft.address.clone(),
+        collateral_id: 0,
+        target_amount: 3000_0000000i128,
+        start_timestamp: current_timestamp,
+        final_timestamp: current_timestamp + 1000_u64,
+        reward_rate: 1000,
+    };
+
+    let contract = EnerDAOTokenClient::new(&e, &e.register_contract(None, EnerDAOToken {}));
+    contract.initialize(
+        &admin,
+        &7,
+        &"LP EnerDAO".into_val(&e),
+        &"LPE".into_val(&e),
+        &project_info,
+    );
+
+
+    contract.lend(&lender, &1000_0000000i128);
+    contract.lend(&lender_2, &1000_0000000i128);
+    contract.lend(&lender, &1000_0000000i128);
+
+    let mut current_info: LedgerInfo = e.ledger().get();
+    current_info.timestamp = current_timestamp + 1001_u64;
+    e.ledger().set(current_info);
+
+    nft.mint(&contract.address, &0, &String::from_str(&e, "https://uri.com"));
+
+
+    contract.borrower_claim();
+    assert_eq!(eurc_token.balance(&borrower), 3000_0000000i128);
+    assert_eq!(eurc_token.balance(&contract.address), 0);
+
+    contract.borrower_return(&borrower, &1000_0000000i128);
+    assert_eq!(contract.lender_available_to_claim(&lender  ), 660_6606606);
+    assert_eq!(contract.lender_available_to_claim(&lender_2), 330_3303303);
+}
+
 // #[test]
 // fn test_borrower_return_budget() {
 //     // Here we test eurc borrower return to the contract
