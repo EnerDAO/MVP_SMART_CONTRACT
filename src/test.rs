@@ -2,11 +2,11 @@
 extern crate std;
 use std::println;
 
-use crate::{contract::EnerDAOToken, storage_types::ProjectInfo, contract::EnerDAOTokenClient};
+use crate::{contract::EnerDAOToken, contract::EnerDAOTokenClient, storage_types::ProjectInfo};
 use soroban_sdk::{
     symbol_short,
     testutils::{Address as _, Ledger, LedgerInfo},
-    vec, Address, Env, IntoVal, token, String
+    token, vec, Address, Env, IntoVal, String,
 };
 
 mod token_contract {
@@ -72,12 +72,17 @@ fn test_lend() {
     };
 
     let contract = EnerDAOTokenClient::new(&e, &e.register_contract(None, EnerDAOToken {}));
-    contract.initialize(
-        &admin,
-        &7,
-        &"LP EnerDAO".into_val(&e),
-        &"LPE".into_val(&e),
-        &project_info,
+    contract.initialize(&admin, &7, &"LP EnerDAO".into_val(&e), &"LPE".into_val(&e));
+
+    contract.init_project(
+        &project_info.borrower,
+        &project_info.lend_token_address,
+        &project_info.collateral_nft_address,
+        &project_info.collateral_id,
+        &project_info.target_amount,
+        &project_info.start_timestamp,
+        &project_info.final_timestamp,
+        &project_info.reward_rate,
     );
 
     assert_eq!(contract.total_supply(), 0);
@@ -127,7 +132,6 @@ fn test_borrower_return() {
     eurc_token.mint(&lender_2, &1000_0000000i128);
 
     let nft = create_nft(&e, &admin);
-    
 
     let current_info: LedgerInfo = e.ledger().get();
     let current_timestamp: u64 = current_info.timestamp;
@@ -144,14 +148,18 @@ fn test_borrower_return() {
     };
 
     let contract = EnerDAOTokenClient::new(&e, &e.register_contract(None, EnerDAOToken {}));
-    contract.initialize(
-        &admin,
-        &7,
-        &"LP EnerDAO".into_val(&e),
-        &"LPE".into_val(&e),
-        &project_info,
-    );
+    contract.initialize(&admin, &7, &"LP EnerDAO".into_val(&e), &"LPE".into_val(&e));
 
+    contract.init_project(
+        &project_info.borrower,
+        &project_info.lend_token_address,
+        &project_info.collateral_nft_address,
+        &project_info.collateral_id,
+        &project_info.target_amount,
+        &project_info.start_timestamp,
+        &project_info.final_timestamp,
+        &project_info.reward_rate,
+    );
 
     assert_eq!(contract.total_supply(), 0);
     assert_eq!(contract.balance(&lender), 0);
@@ -179,7 +187,11 @@ fn test_borrower_return() {
     current_info.timestamp = current_timestamp + 1001_u64;
     e.ledger().set(current_info);
 
-    nft.mint(&contract.address, &0, &String::from_str(&e, "https://uri.com"));
+    nft.mint(
+        &contract.address,
+        &0,
+        &String::from_str(&e, "https://uri.com"),
+    );
 
     assert_eq!(eurc_token.balance(&borrower), 0);
     contract.borrower_claim();
@@ -187,15 +199,23 @@ fn test_borrower_return() {
     assert_eq!(eurc_token.balance(&contract.address), 0);
 
     contract.borrower_return(&borrower, &1110_0000000i128);
-    assert_eq!(contract.lender_available_to_claim(&lender  ), 550_0000000i128);
-    assert_eq!(contract.lender_available_to_claim(&lender_2), 550_0000000i128);
+    assert_eq!(contract.lender_available_to_claim(&lender), 550_0000000i128);
+    assert_eq!(
+        contract.lender_available_to_claim(&lender_2),
+        550_0000000i128
+    );
 
     eurc_token.mint(&borrower, &220_0000000i128);
     contract.borrower_return(&borrower, &1110_0000000i128);
-    assert_eq!(contract.lender_available_to_claim(&lender  ), 1100_0000000i128);
-    assert_eq!(contract.lender_available_to_claim(&lender_2), 1100_0000000i128);
+    assert_eq!(
+        contract.lender_available_to_claim(&lender),
+        1100_0000000i128
+    );
+    assert_eq!(
+        contract.lender_available_to_claim(&lender_2),
+        1100_0000000i128
+    );
 }
-
 
 #[test]
 fn test_borrower_return_rounding() {
@@ -213,7 +233,6 @@ fn test_borrower_return_rounding() {
     eurc_token.mint(&lender_2, &1000_0000000i128);
 
     let nft = create_nft(&e, &admin);
-    
 
     let current_info: LedgerInfo = e.ledger().get();
     let current_timestamp: u64 = current_info.timestamp;
@@ -222,7 +241,7 @@ fn test_borrower_return_rounding() {
         borrower: borrower.clone(),
         lend_token_address: eurc_token.address.clone(),
         collateral_nft_address: nft.address.clone(),
-        collateral_id: 0,
+        collateral_id: 777,
         target_amount: 3000_0000000i128,
         start_timestamp: current_timestamp,
         final_timestamp: current_timestamp + 1000_u64,
@@ -230,14 +249,18 @@ fn test_borrower_return_rounding() {
     };
 
     let contract = EnerDAOTokenClient::new(&e, &e.register_contract(None, EnerDAOToken {}));
-    contract.initialize(
-        &admin,
-        &7,
-        &"LP EnerDAO".into_val(&e),
-        &"LPE".into_val(&e),
-        &project_info,
-    );
+    contract.initialize(&admin, &7, &"LP EnerDAO".into_val(&e), &"LPE".into_val(&e));
 
+    contract.init_project(
+        &project_info.borrower,
+        &project_info.lend_token_address,
+        &project_info.collateral_nft_address,
+        &project_info.collateral_id,
+        &project_info.target_amount,
+        &project_info.start_timestamp,
+        &project_info.final_timestamp,
+        &project_info.reward_rate,
+    );
 
     contract.lend(&lender, &1000_0000000i128);
     contract.lend(&lender_2, &1000_0000000i128);
@@ -247,16 +270,101 @@ fn test_borrower_return_rounding() {
     current_info.timestamp = current_timestamp + 1001_u64;
     e.ledger().set(current_info);
 
-    nft.mint(&contract.address, &0, &String::from_str(&e, "https://uri.com"));
-
+    nft.mint(
+        &contract.address,
+        &777,
+        &String::from_str(&e, "https://uri.com"),
+    );
 
     contract.borrower_claim();
     assert_eq!(eurc_token.balance(&borrower), 3000_0000000i128);
     assert_eq!(eurc_token.balance(&contract.address), 0);
 
     contract.borrower_return(&borrower, &1000_0000000i128);
-    assert_eq!(contract.lender_available_to_claim(&lender  ), 660_6606606);
+    assert_eq!(contract.lender_available_to_claim(&lender), 660_6606606);
     assert_eq!(contract.lender_available_to_claim(&lender_2), 330_3303303);
+
+    contract.lender_claim(&lender_2);
+    assert_eq!(contract.lender_available_to_claim(&lender), 660_6606606);
+    assert_eq!(contract.lender_available_to_claim(&lender_2), 0);
+}
+
+#[test]
+fn test_failed_target_amount() {
+    // Here we test eurc borrower return to the contract
+    let e = Env::default();
+    e.mock_all_auths();
+
+    let admin = Address::generate(&e);
+    let lender = Address::generate(&e);
+    let lender_2 = Address::generate(&e);
+    let borrower = Address::generate(&e);
+    let eurc_token = create_custom_token(&e, &admin, &7);
+
+    eurc_token.mint(&lender, &2000_0000000i128);
+    eurc_token.mint(&lender_2, &1000_0000000i128);
+
+    let nft = create_nft(&e, &admin);
+
+    let current_info: LedgerInfo = e.ledger().get();
+    let current_timestamp: u64 = current_info.timestamp;
+
+    let mut project_info = ProjectInfo {
+        borrower: borrower.clone(),
+        lend_token_address: eurc_token.address.clone(),
+        collateral_nft_address: nft.address.clone(),
+        collateral_id: 666,
+        target_amount: 5000_0000000i128,
+        start_timestamp: current_timestamp,
+        final_timestamp: current_timestamp + 1000_u64,
+        reward_rate: 1000,
+    };
+
+    let contract = EnerDAOTokenClient::new(&e, &e.register_contract(None, EnerDAOToken {}));
+    contract.initialize(&admin, &7, &"LP EnerDAO".into_val(&e), &"LPE".into_val(&e));
+
+    contract.init_project(
+        &project_info.borrower,
+        &project_info.lend_token_address,
+        &project_info.collateral_nft_address,
+        &project_info.collateral_id,
+        &project_info.target_amount,
+        &project_info.start_timestamp,
+        &project_info.final_timestamp,
+        &project_info.reward_rate,
+    );
+
+    contract.lend(&lender, &1000_0000000i128);
+    contract.lend(&lender_2, &1000_0000000i128);
+    contract.lend(&lender, &1000_0000000i128);
+
+    contract.set_lender_claim_available(&true, &true);
+
+    assert_eq!(
+        contract.lender_available_to_claim(&lender),
+        2000_0000000i128
+    );
+    assert_eq!(
+        contract.lender_available_to_claim(&lender_2),
+        1000_0000000i128
+    );
+    assert_eq!(contract.balance(&lender), 2000_0000000i128);
+    assert_eq!(contract.balance(&lender_2), 1000_0000000i128);
+
+    contract.lender_claim(&lender_2);
+    assert_eq!(
+        contract.lender_available_to_claim(&lender),
+        2000_0000000i128
+    );
+    assert_eq!(contract.lender_available_to_claim(&lender_2), 0);
+
+    contract.lender_claim(&lender);
+    assert_eq!(contract.lender_available_to_claim(&lender), 0);
+    assert_eq!(contract.lender_available_to_claim(&lender_2), 0);
+    assert_eq!(eurc_token.balance(&lender), 2000_0000000i128);
+    assert_eq!(eurc_token.balance(&lender_2), 1000_0000000i128);
+    assert_eq!(contract.balance(&lender), 0);
+    assert_eq!(contract.balance(&lender_2), 0);
 }
 
 // #[test]

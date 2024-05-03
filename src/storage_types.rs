@@ -49,4 +49,5 @@ pub enum DataKey {
     ClaimedBalance(Address),
     TotalReturn,
     FeeAccumulated,
+    TargetNotReached,
 }
