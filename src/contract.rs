@@ -10,9 +10,11 @@ use crate::storage_types::{
     INSTANCE_LIFETIME_THRESHOLD,
 };
 use soroban_sdk::token::{self, Interface as _};
-use soroban_sdk::{contract, contractimpl, Address, Env, String, Vec};
+use soroban_sdk::{contract, contractimpl, panic_with_error, Address, Env, String, Vec};
 use soroban_token_sdk::metadata::TokenMetadata;
 use soroban_token_sdk::TokenUtils;
+
+use crate::errors::Error;
 
 const PROTOCOL_FEE: i128 = 1000;
 const REWARD_DENOM: i128 = 10000;
@@ -21,9 +23,9 @@ mod contract_nft {
     soroban_sdk::contractimport!(file = "./token/non_fungible_token.optimized.wasm");
 }
 
-fn check_nonnegative_amount(amount: i128) {
+fn check_nonnegative_amount(e: &Env, amount: i128) {
     if amount < 0 {
-        panic!("negative amount is not allowed: {}", amount)
+        panic_with_error!(e, Error::OnlyPositiveValue);
     }
 }
 
@@ -36,28 +38,28 @@ fn get_project_info(e: &Env) -> ProjectInfo {
 fn require_start_time_reached(e: &Env) {
     let start_time: u64 = get_project_info(e).start_timestamp;
     if e.ledger().timestamp() < start_time {
-        panic!("Start time not reached")
+        panic_with_error!(e, Error::NotStarted)
     }
 }
 
 fn require_final_time_not_reached(e: &Env) {
     // let final_time: u64 = get_project_info(e).final_timestamp;
     // if e.ledger().timestamp() > final_time {
-    //     panic!("Final time reached")
+    //     panic_with_error!(e, Error::AlreadyFinished)
     // }
 }
 
 fn require_final_time_reached(e: &Env) {
     // let final_time: u64 = get_project_info(e).final_timestamp;
     // if e.ledger().timestamp() <= final_time {
-    //     panic!("Final time not reached")
+    //     panic_with_error!(e, Error::NotFinished)
     // }
 }
 
 fn require_target_amount_reached(e: &Env) {
     let target_amount: i128 = get_project_info(e).target_amount;
     if read_total_supply(&e) < target_amount {
-        panic!("Target amount not reached")
+        panic_with_error!(e, Error::TargetNotReached)
     }
 }
 
@@ -68,7 +70,7 @@ fn require_nft_collateral(e: &Env) {
     let nft_client = contract_nft::Client::new(&e, &collateral_nft_address);
     let nft_owner: Address = nft_client.owner_of(&collateral_id);
     if nft_owner != e.current_contract_address() {
-        panic!("No collateral nft")
+        panic_with_error!(e, Error::NoCollateral)
     }
 }
 
@@ -171,12 +173,9 @@ fn move_token(env: &Env, from: &Address, to: &Address, transfer_amount: i128) {
 impl EnerDAOToken {
     pub fn initialize(e: Env, admin: Address, decimal: u32, name: String, symbol: String) {
         if has_administrator(&e) {
-            panic!("already initialized")
+            panic_with_error!(&e, Error::AlreadyInitialized)
         }
         write_administrator(&e, &admin);
-        if decimal > u8::MAX.into() {
-            panic!("Decimal must fit in a u8");
-        }
 
         write_metadata(
             &e,
@@ -217,7 +216,7 @@ impl EnerDAOToken {
     }
 
     pub fn lend(e: Env, lender: Address, amount: i128) {
-        check_nonnegative_amount(amount);
+        check_nonnegative_amount(&e, amount);
         lender.require_auth();
 
         require_start_time_reached(&e);
@@ -226,7 +225,7 @@ impl EnerDAOToken {
         let target_amount: i128 = get_project_info(&e).target_amount;
         let total_supply: i128 = read_total_supply(&e);
         if total_supply + amount > target_amount {
-            panic!("Target amount overreached");
+            panic_with_error!(e, Error::TargetOverreached)
         }
 
         move_token(&e, &lender, &e.current_contract_address(), amount);
@@ -285,7 +284,7 @@ impl EnerDAOToken {
         let entitled_amount: i128 = Self::lender_available_to_claim(e.clone(), lender.clone());
 
         if entitled_amount <= 0 {
-            panic!("Nothing to claim");
+            panic_with_error!(e, Error::NothingToClaim)
         }
         let reward_rate: i128 = get_project_info(&e).reward_rate;
         let target_not_reached: bool = e
@@ -351,7 +350,7 @@ impl EnerDAOToken {
     }
 
     pub fn mint(e: Env, to: Address, amount: i128) {
-        check_nonnegative_amount(amount);
+        check_nonnegative_amount(&e, amount);
         let admin = read_administrator(&e);
         admin.require_auth();
 
@@ -465,10 +464,10 @@ impl token::Interface for EnerDAOToken {
     }
 
     fn approve(e: Env, from: Address, spender: Address, amount: i128, expiration_ledger: u32) {
-        panic!("Not allowed!");
+        panic_with_error!(&e, Error::NotAllowed);
         // from.require_auth();
 
-        // check_nonnegative_amount(amount);
+        // check_nonnegative_amount(&e, amount);
 
         // e.storage()
         //     .instance()
@@ -488,10 +487,10 @@ impl token::Interface for EnerDAOToken {
     }
 
     fn transfer(e: Env, from: Address, to: Address, amount: i128) {
-        panic!("Not allowed!");
+        panic_with_error!(&e, Error::NotAllowed);
         // from.require_auth();
 
-        // check_nonnegative_amount(amount);
+        // check_nonnegative_amount(&e, amount);
 
         // e.storage()
         //     .instance()
@@ -504,10 +503,10 @@ impl token::Interface for EnerDAOToken {
     }
 
     fn transfer_from(e: Env, spender: Address, from: Address, to: Address, amount: i128) {
-        panic!("Not allowed!");
+        panic_with_error!(&e, Error::NotAllowed);
         // spender.require_auth();
 
-        // check_nonnegative_amount(amount);
+        // check_nonnegative_amount(&e, amount);
 
         // e.storage()
         //     .instance()
@@ -526,16 +525,16 @@ impl token::Interface for EnerDAOToken {
         let admin = read_administrator(&e);
         admin.require_auth();
 
-        check_nonnegative_amount(amount);
+        check_nonnegative_amount(&e, amount);
 
         _burn(e, from, amount);
     }
 
     fn burn_from(e: Env, spender: Address, from: Address, amount: i128) {
-        panic!("Not allowed!");
+        panic_with_error!(&e, Error::NotAllowed);
         // spender.require_auth();
 
-        // check_nonnegative_amount(amount);
+        // check_nonnegative_amount(&e, amount);
 
         // spend_allowance(&e, from.clone(), spender, amount);
         // _burn(e, from, amount);

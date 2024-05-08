@@ -8,5 +8,6 @@ mod metadata;
 mod storage_types;
 mod test;
 // mod test_token;
+mod errors;
 
 pub use crate::contract::EnerDAOTokenClient;
