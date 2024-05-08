@@ -68,7 +68,7 @@ fn require_nft_collateral(e: &Env) {
     let collateral_id: u128 = get_project_info(e).collateral_id;
     // owner_of() &e.current_contract_address()
     let nft_client = contract_nft::Client::new(&e, &collateral_nft_address);
-    let nft_owner: Address = nft_client.owner_of(&collateral_id);
+    let nft_owner: Address = nft_client.try_owner_of(&collateral_id).unwrap().unwrap_or(collateral_nft_address);
     if nft_owner != e.current_contract_address() {
         panic_with_error!(e, Error::NoCollateral)
     }
@@ -314,12 +314,45 @@ impl EnerDAOToken {
         let borrower: Address = get_project_info(&e).borrower;
         borrower.require_auth();
 
+        let already_claimed: bool = e.storage().persistent().get(&DataKey::BorrowerClaimed).unwrap_or(false);
+        if already_claimed {
+            panic_with_error!(&e, Error::AlreadyClaimed)
+        }
+
         require_target_amount_reached(&e);
         require_final_time_reached(&e);
         require_nft_collateral(&e);
 
+        e.storage().persistent().set(&DataKey::BorrowerClaimed, &true);
+
         let amount: i128 = read_total_supply(&e);
         move_token(&e, &e.current_contract_address(), &borrower, amount);
+    }
+
+    pub fn borrower_claim_status(e: &Env) -> String {
+
+        let already_claimed: bool = e.storage().persistent().get(&DataKey::BorrowerClaimed).unwrap_or(false);
+        if already_claimed {
+            return String::from_str(e, "AlreadyClaimed");
+        }
+
+        let project_info: ProjectInfo = get_project_info(e);
+        let target_amount: i128 = project_info.target_amount;
+        let final_time: u64 = project_info.final_timestamp;
+        // if e.ledger().timestamp() <= final_time {
+        //     return String::from_str(e, "NotFinished");
+        // }
+        if read_total_supply(&e) < target_amount {
+            return String::from_str(e, "TargetNotReached");
+        }
+        let collateral_nft_address: Address = project_info.collateral_nft_address;
+        let collateral_id: u128 = project_info.collateral_id;
+        let nft_client = contract_nft::Client::new(&e, &collateral_nft_address);
+        let nft_owner: Address = nft_client.try_owner_of(&collateral_id).unwrap_or(Ok(collateral_nft_address)).unwrap();
+        if nft_owner != e.current_contract_address() {
+            return String::from_str(e, "NoCollateral");
+        }
+        return String::from_str(e, "Available");
     }
 
     pub fn borrower_return(e: Env, borrower: Address, amount: i128) {

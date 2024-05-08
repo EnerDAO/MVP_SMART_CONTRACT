@@ -187,6 +187,8 @@ fn test_borrower_return() {
     current_info.timestamp = current_timestamp + 1001_u64;
     e.ledger().set(current_info);
 
+    assert_eq!(contract.borrower_claim_status(), String::from_str(&e, "NoCollateral"));
+
     nft.mint(
         &contract.address,
         &0,
@@ -194,7 +196,9 @@ fn test_borrower_return() {
     );
 
     assert_eq!(eurc_token.balance(&borrower), 0);
+    assert_eq!(contract.borrower_claim_status(), String::from_str(&e, "Available"));
     contract.borrower_claim();
+    assert_eq!(contract.borrower_claim_status(), String::from_str(&e, "AlreadyClaimed"));
     assert_eq!(eurc_token.balance(&borrower), 2000_0000000i128);
     assert_eq!(eurc_token.balance(&contract.address), 0);
 
@@ -337,6 +341,8 @@ fn test_failed_target_amount() {
     contract.lend(&lender, &1000_0000000i128);
     contract.lend(&lender_2, &1000_0000000i128);
     contract.lend(&lender, &1000_0000000i128);
+
+    assert_eq!(contract.borrower_claim_status(), String::from_str(&e, "TargetNotReached"));
 
     contract.set_lender_claim_available(&true, &true);
 

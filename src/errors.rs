@@ -13,5 +13,6 @@ pub enum Error {
     TargetOverreached = 106,
     NoCollateral = 107,
     NothingToClaim = 108,
+    AlreadyClaimed = 109,
     NotAllowed = 120,
 }

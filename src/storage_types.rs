@@ -50,4 +50,5 @@ pub enum DataKey {
     TotalReturn,
     FeeAccumulated,
     TargetNotReached,
+    BorrowerClaimed,
 }
