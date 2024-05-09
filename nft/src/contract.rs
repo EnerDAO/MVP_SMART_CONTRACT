@@ -62,6 +62,10 @@ impl NonFungibleToken {
         read_owner(&env, id)
     }
 
+    pub fn has_owner(env: Env, id: u128) -> bool{
+        has_owner(&env, id)
+    }
+
     pub fn transfer(env: Env, from: Address, to: Address, id: u128) {
         from.require_auth();
 

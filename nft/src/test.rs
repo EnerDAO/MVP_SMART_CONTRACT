@@ -24,9 +24,17 @@ fn test_mint() {
     let user2 = Address::generate(&env);
     let nft = create_token(&env, &admin);
 
+    assert_eq!(nft.has_owner(&1), false);
+    assert_eq!(nft.has_owner(&2), false);
+    assert_eq!(nft.has_owner(&3), false);
+
     nft.mint(&user1, &1, &String::from_str(&env, "https://music.youtube.com/watch?v=yRVotpLaCD4"));
     nft.mint(&user2, &2, &String::from_str(&env, "https://music.youtube.com/watch?v=yRVotpLaCD4"));
     nft.mint(&user1, &3, &String::from_str(&env, "https://music.youtube.com/watch?v=yRVotpLaCD4"));
+
+    assert_eq!(nft.has_owner(&1), true);
+    assert_eq!(nft.has_owner(&2), true);
+    assert_eq!(nft.has_owner(&3), true);
 
     std::println!("{}", env.logs().all().join("\n"));
 }
