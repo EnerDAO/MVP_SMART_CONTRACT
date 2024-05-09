@@ -68,7 +68,11 @@ fn require_nft_collateral(e: &Env) {
     let collateral_id: u128 = get_project_info(e).collateral_id;
     // owner_of() &e.current_contract_address()
     let nft_client = contract_nft::Client::new(&e, &collateral_nft_address);
-    let nft_owner: Address = nft_client.try_owner_of(&collateral_id).unwrap().unwrap_or(collateral_nft_address);
+    let nft_has_owner: bool = nft_client.has_owner(&collateral_id);
+    if !nft_has_owner {
+        panic_with_error!(e, Error::NoCollateral)
+    }
+    let nft_owner: Address = nft_client.owner_of(&collateral_id);
     if nft_owner != e.current_contract_address() {
         panic_with_error!(e, Error::NoCollateral)
     }
@@ -348,7 +352,11 @@ impl EnerDAOToken {
         let collateral_nft_address: Address = project_info.collateral_nft_address;
         let collateral_id: u128 = project_info.collateral_id;
         let nft_client = contract_nft::Client::new(&e, &collateral_nft_address);
-        let nft_owner: Address = nft_client.try_owner_of(&collateral_id).unwrap_or(Ok(collateral_nft_address)).unwrap();
+        let nft_has_owner: bool = nft_client.has_owner(&collateral_id);
+        if !nft_has_owner {
+            return String::from_str(e, "NoCollateral");
+        }
+        let nft_owner: Address = nft_client.owner_of(&collateral_id);
         if nft_owner != e.current_contract_address() {
             return String::from_str(e, "NoCollateral");
         }
