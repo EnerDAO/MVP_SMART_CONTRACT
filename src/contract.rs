@@ -43,17 +43,17 @@ fn require_start_time_reached(e: &Env) {
 }
 
 fn require_final_time_not_reached(e: &Env) {
-    // let final_time: u64 = get_project_info(e).final_timestamp;
-    // if e.ledger().timestamp() > final_time {
-    //     panic_with_error!(e, Error::AlreadyFinished)
-    // }
+    let final_time: u64 = get_project_info(e).final_timestamp;
+    if e.ledger().timestamp() > final_time {
+        panic_with_error!(e, Error::AlreadyFinished)
+    }
 }
 
 fn require_final_time_reached(e: &Env) {
-    // let final_time: u64 = get_project_info(e).final_timestamp;
-    // if e.ledger().timestamp() <= final_time {
-    //     panic_with_error!(e, Error::NotFinished)
-    // }
+    let final_time: u64 = get_project_info(e).final_timestamp;
+    if e.ledger().timestamp() <= final_time {
+        panic_with_error!(e, Error::NotFinished)
+    }
 }
 
 fn require_target_amount_reached(e: &Env) {
@@ -324,7 +324,7 @@ impl EnerDAOToken {
         }
 
         require_target_amount_reached(&e);
-        require_final_time_reached(&e);
+        // require_final_time_reached(&e);
         require_nft_collateral(&e);
 
         e.storage().persistent().set(&DataKey::BorrowerClaimed, &true);
