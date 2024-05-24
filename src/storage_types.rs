@@ -30,6 +30,7 @@ pub struct ProjectInfo {
     pub start_timestamp: u64,
     pub final_timestamp: u64,
     pub reward_rate: i128,
+    pub treasury_address: Address,
 }
 
 #[derive(Clone)]

@@ -201,6 +201,7 @@ impl EnerDAOToken {
         start_timestamp: u64,
         final_timestamp: u64,
         reward_rate: i128,
+        treasury_address: Address,
     ) {
         let admin = read_administrator(&e);
         admin.require_auth();
@@ -214,6 +215,7 @@ impl EnerDAOToken {
             start_timestamp,
             final_timestamp,
             reward_rate,
+            treasury_address,
         };
         let project_key: DataKey = DataKey::ProjectInfo;
         e.storage().persistent().set(&project_key, &project_info);
@@ -371,7 +373,8 @@ impl EnerDAOToken {
         move_token(&e, &borrower, &e.current_contract_address(), amount);
 
         // Calculation of protocol fee
-        let reward_rate: i128 = get_project_info(&e).reward_rate;
+        let project_info: ProjectInfo = get_project_info(&e);
+        let reward_rate: i128 = project_info.reward_rate;
         let base_return: i128 = amount * REWARD_DENOM
             / (REWARD_DENOM + reward_rate + reward_rate * PROTOCOL_FEE / REWARD_DENOM);
         let protocol_fee: i128 = amount - base_return - base_return * reward_rate / REWARD_DENOM;
@@ -385,6 +388,8 @@ impl EnerDAOToken {
         let mut total_fee = e.storage().persistent().get(&key_fee).unwrap_or(0);
         total_fee += protocol_fee;
         e.storage().persistent().set(&key_fee, &total_fee);
+
+        move_token(&e, &e.current_contract_address(), &project_info.treasury_address, protocol_fee);
 
         let key_claim: DataKey = DataKey::ClaimAvailable;
         e.storage().persistent().set(&key_claim, &true);
