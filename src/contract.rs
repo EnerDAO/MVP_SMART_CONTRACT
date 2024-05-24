@@ -10,7 +10,7 @@ use crate::storage_types::{
     INSTANCE_LIFETIME_THRESHOLD,
 };
 use soroban_sdk::token::{self, Interface as _};
-use soroban_sdk::{contract, contractimpl, panic_with_error, Address, Env, String, Vec, Symbol};
+use soroban_sdk::{contract, contractimpl, panic_with_error, Address, Env, String, Symbol, Vec};
 use soroban_token_sdk::metadata::TokenMetadata;
 use soroban_token_sdk::TokenUtils;
 
@@ -124,7 +124,6 @@ fn _burn(e: Env, from: Address, amount: i128) {
     spend_balance(&e, from.clone(), amount);
     sub_total_supply(&e, amount);
     TokenUtils::new(&e).events().burn(from.clone(), amount);
-
 }
 
 fn read_number_of_lenders(e: &Env) -> u128 {
@@ -239,13 +238,8 @@ impl EnerDAOToken {
         _mint(e.clone(), lender.clone(), amount);
         _add_lender(e.clone(), lender.clone());
 
-        e.events().publish(
-            (
-                Symbol::new(&e, "lend"),
-                lender.clone(),
-            ),
-            (amount),
-        );
+        e.events()
+            .publish((Symbol::new(&e, "lend"), lender.clone()), (amount));
     }
 
     pub fn is_lender_claim_available(e: &Env) -> bool {
@@ -325,10 +319,7 @@ impl EnerDAOToken {
         e.storage().persistent().set(&key_claimed, &already_claimed);
 
         e.events().publish(
-            (
-                Symbol::new(&e, "lender_claim"),
-                lender.clone(),
-            ),
+            (Symbol::new(&e, "lender_claim"), lender.clone()),
             (entitled_amount),
         );
     }
@@ -337,7 +328,11 @@ impl EnerDAOToken {
         let borrower: Address = get_project_info(&e).borrower;
         borrower.require_auth();
 
-        let already_claimed: bool = e.storage().persistent().get(&DataKey::BorrowerClaimed).unwrap_or(false);
+        let already_claimed: bool = e
+            .storage()
+            .persistent()
+            .get(&DataKey::BorrowerClaimed)
+            .unwrap_or(false);
         if already_claimed {
             panic_with_error!(&e, Error::AlreadyClaimed)
         }
@@ -346,23 +341,25 @@ impl EnerDAOToken {
         // require_final_time_reached(&e);
         require_nft_collateral(&e);
 
-        e.storage().persistent().set(&DataKey::BorrowerClaimed, &true);
+        e.storage()
+            .persistent()
+            .set(&DataKey::BorrowerClaimed, &true);
 
         let amount: i128 = read_total_supply(&e);
         move_token(&e, &e.current_contract_address(), &borrower, amount);
 
         e.events().publish(
-            (
-                Symbol::new(&e, "borrower_claim"),
-                borrower.clone(),
-            ),
+            (Symbol::new(&e, "borrower_claim"), borrower.clone()),
             (amount),
         );
     }
 
     pub fn borrower_claim_status(e: &Env) -> String {
-
-        let already_claimed: bool = e.storage().persistent().get(&DataKey::BorrowerClaimed).unwrap_or(false);
+        let already_claimed: bool = e
+            .storage()
+            .persistent()
+            .get(&DataKey::BorrowerClaimed)
+            .unwrap_or(false);
         if already_claimed {
             return String::from_str(e, "AlreadyClaimed");
         }
@@ -414,16 +411,18 @@ impl EnerDAOToken {
         total_fee += protocol_fee;
         e.storage().persistent().set(&key_fee, &total_fee);
 
-        move_token(&e, &e.current_contract_address(), &project_info.treasury_address, protocol_fee);
+        move_token(
+            &e,
+            &e.current_contract_address(),
+            &project_info.treasury_address,
+            protocol_fee,
+        );
 
         let key_claim: DataKey = DataKey::ClaimAvailable;
         e.storage().persistent().set(&key_claim, &true);
 
         e.events().publish(
-            (
-                Symbol::new(&e, "borrower_return"),
-                borrower.clone(),
-            ),
+            (Symbol::new(&e, "borrower_return"), borrower.clone()),
             (amount),
         );
 

@@ -191,7 +191,10 @@ fn test_borrower_return() {
     current_info.timestamp = current_timestamp + 1001_u64;
     e.ledger().set(current_info);
 
-    assert_eq!(contract.borrower_claim_status(), String::from_str(&e, "NoCollateral"));
+    assert_eq!(
+        contract.borrower_claim_status(),
+        String::from_str(&e, "NoCollateral")
+    );
 
     nft.mint(
         &contract.address,
@@ -200,9 +203,15 @@ fn test_borrower_return() {
     );
 
     assert_eq!(eurc_token.balance(&borrower), 0);
-    assert_eq!(contract.borrower_claim_status(), String::from_str(&e, "Available"));
+    assert_eq!(
+        contract.borrower_claim_status(),
+        String::from_str(&e, "Available")
+    );
     contract.borrower_claim();
-    assert_eq!(contract.borrower_claim_status(), String::from_str(&e, "AlreadyClaimed"));
+    assert_eq!(
+        contract.borrower_claim_status(),
+        String::from_str(&e, "AlreadyClaimed")
+    );
     // assert_eq!(eurc_token.balance(&borrower), 2000_0000000i128);
     // assert_eq!(eurc_token.balance(&contract.address), 0);
 
@@ -212,7 +221,6 @@ fn test_borrower_return() {
         contract.lender_available_to_claim(&lender_2),
         550_0000000i128
     );
-
 
     eurc_token.mint(&borrower, &220_0000000i128);
     contract.borrower_return(&borrower, &1110_0000000i128);
@@ -224,10 +232,9 @@ fn test_borrower_return() {
         contract.lender_available_to_claim(&lender_2),
         1100_0000000i128
     );
-    
-    assert_eq!(eurc_token.balance(&contract.address), 2200_0000000i128); // return - protocol fee
-    assert_eq!(eurc_token.balance(&admin), 20_0000000i128);              // protocol fee
 
+    assert_eq!(eurc_token.balance(&contract.address), 2200_0000000i128); // return - protocol fee
+    assert_eq!(eurc_token.balance(&admin), 20_0000000i128); // protocol fee
 }
 
 #[test]
@@ -299,7 +306,7 @@ fn test_borrower_return_rounding() {
     assert_eq!(contract.lender_available_to_claim(&lender), 660_6606606);
     assert_eq!(contract.lender_available_to_claim(&lender_2), 330_3303303);
     assert_eq!(eurc_token.balance(&contract.address), 990_9909909); // return - protocol fee
-    assert_eq!(eurc_token.balance(&admin), 9_0090091);              // protocol fee
+    assert_eq!(eurc_token.balance(&admin), 9_0090091); // protocol fee
 
     contract.lender_claim(&lender_2);
     assert_eq!(contract.lender_available_to_claim(&lender), 660_6606606);
@@ -357,7 +364,10 @@ fn test_failed_target_amount() {
     contract.lend(&lender_2, &1000_0000000i128);
     contract.lend(&lender, &1000_0000000i128);
 
-    assert_eq!(contract.borrower_claim_status(), String::from_str(&e, "TargetNotReached"));
+    assert_eq!(
+        contract.borrower_claim_status(),
+        String::from_str(&e, "TargetNotReached")
+    );
 
     contract.set_lender_claim_available(&true, &true);
 
