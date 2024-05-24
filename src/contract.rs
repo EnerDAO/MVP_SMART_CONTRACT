@@ -10,7 +10,7 @@ use crate::storage_types::{
     INSTANCE_LIFETIME_THRESHOLD,
 };
 use soroban_sdk::token::{self, Interface as _};
-use soroban_sdk::{contract, contractimpl, panic_with_error, Address, Env, String, Vec};
+use soroban_sdk::{contract, contractimpl, panic_with_error, Address, Env, String, Vec, Symbol};
 use soroban_token_sdk::metadata::TokenMetadata;
 use soroban_token_sdk::TokenUtils;
 
@@ -123,7 +123,8 @@ fn _burn(e: Env, from: Address, amount: i128) {
 
     spend_balance(&e, from.clone(), amount);
     sub_total_supply(&e, amount);
-    TokenUtils::new(&e).events().burn(from, amount);
+    TokenUtils::new(&e).events().burn(from.clone(), amount);
+
 }
 
 fn read_number_of_lenders(e: &Env) -> u128 {
@@ -237,6 +238,14 @@ impl EnerDAOToken {
         move_token(&e, &lender, &e.current_contract_address(), amount);
         _mint(e.clone(), lender.clone(), amount);
         _add_lender(e.clone(), lender.clone());
+
+        e.events().publish(
+            (
+                Symbol::new(&e, "lend"),
+                lender.clone(),
+            ),
+            (amount),
+        );
     }
 
     pub fn is_lender_claim_available(e: &Env) -> bool {
@@ -314,6 +323,14 @@ impl EnerDAOToken {
         let mut already_claimed: i128 = e.storage().persistent().get(&key_claimed).unwrap_or(0);
         already_claimed += burn_amount;
         e.storage().persistent().set(&key_claimed, &already_claimed);
+
+        e.events().publish(
+            (
+                Symbol::new(&e, "lender_claim"),
+                lender.clone(),
+            ),
+            (entitled_amount),
+        );
     }
 
     pub fn borrower_claim(e: Env) {
@@ -333,6 +350,14 @@ impl EnerDAOToken {
 
         let amount: i128 = read_total_supply(&e);
         move_token(&e, &e.current_contract_address(), &borrower, amount);
+
+        e.events().publish(
+            (
+                Symbol::new(&e, "borrower_claim"),
+                borrower.clone(),
+            ),
+            (amount),
+        );
     }
 
     pub fn borrower_claim_status(e: &Env) -> String {
@@ -393,6 +418,22 @@ impl EnerDAOToken {
 
         let key_claim: DataKey = DataKey::ClaimAvailable;
         e.storage().persistent().set(&key_claim, &true);
+
+        e.events().publish(
+            (
+                Symbol::new(&e, "borrower_return"),
+                borrower.clone(),
+            ),
+            (amount),
+        );
+
+        e.events().publish(
+            (
+                Symbol::new(&e, "protocol_fee"),
+                project_info.treasury_address,
+            ),
+            (protocol_fee),
+        );
     }
 
     pub fn mint(e: Env, to: Address, amount: i128) {
