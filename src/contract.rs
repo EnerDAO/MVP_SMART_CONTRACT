@@ -244,24 +244,49 @@ impl EnerDAOToken {
 
     pub fn is_lender_claim_available(e: &Env) -> bool {
         let key: DataKey = DataKey::ClaimAvailable;
-        let claim_available: bool = e.storage().persistent().get(&key).unwrap_or(false);
+        let mut claim_available: bool = e.storage().persistent().get(&key).unwrap_or(false);
+        let target_not_reached: bool = Self::is_target_not_reached(&e);
+        if target_not_reached {
+            claim_available = true;
+        }
         return claim_available;
     }
 
-    pub fn lender_available_to_claim(e: Env, lender: Address) -> i128 {
-        if !Self::is_lender_claim_available(&e) {
-            return 0;
-        }
-
-        let lender_balance: i128 = read_balance(&e, lender.clone());
-
-        let target_not_reached = e
+    pub fn is_target_not_reached(e: &Env) -> bool {
+        let mut target_not_reached = e
             .storage()
             .persistent()
             .get(&DataKey::TargetNotReached)
             .unwrap_or(false);
+        if !target_not_reached {
+            let final_time: u64 = get_project_info(&e).final_timestamp;
+            let target_amount: i128 = get_project_info(&e).target_amount;
+            let already_claimed: bool = e
+                .storage()
+                .persistent()
+                .get(&DataKey::BorrowerClaimed)
+                .unwrap_or(false);
+            if !already_claimed
+                && e.ledger().timestamp() > final_time
+                && read_total_supply(&e) < target_amount
+            {
+                target_not_reached = true;
+            }
+        }
+        return target_not_reached;
+    }
+
+    pub fn lender_available_to_claim(e: Env, lender: Address) -> i128 {
+        let lender_balance: i128 = read_balance(&e, lender.clone());
+
+        let target_not_reached: bool = Self::is_target_not_reached(&e);
+
         if target_not_reached {
             return lender_balance;
+        }
+
+        if !Self::is_lender_claim_available(&e) {
+            return 0;
         }
 
         let key_claimed: DataKey = DataKey::ClaimedBalance(lender.clone());
@@ -296,11 +321,8 @@ impl EnerDAOToken {
             panic_with_error!(e, Error::NothingToClaim)
         }
         let reward_rate: i128 = get_project_info(&e).reward_rate;
-        let target_not_reached: bool = e
-            .storage()
-            .persistent()
-            .get(&DataKey::TargetNotReached)
-            .unwrap_or(false);
+
+        let target_not_reached: bool = Self::is_target_not_reached(&e);
 
         let burn_amount: i128;
         if target_not_reached {
@@ -366,7 +388,7 @@ impl EnerDAOToken {
 
         let project_info: ProjectInfo = get_project_info(e);
         let target_amount: i128 = project_info.target_amount;
-        let final_time: u64 = project_info.final_timestamp;
+        // let final_time: u64 = project_info.final_timestamp;
         // if e.ledger().timestamp() <= final_time {
         //     return String::from_str(e, "NotFinished");
         // }

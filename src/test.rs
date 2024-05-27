@@ -369,7 +369,12 @@ fn test_failed_target_amount() {
         String::from_str(&e, "TargetNotReached")
     );
 
-    contract.set_lender_claim_available(&true, &true);
+    // contract.set_lender_claim_available(&true, &true);
+    // Automatic TargerNotReached
+    let mut current_info: LedgerInfo = e.ledger().get();
+    current_info.sequence_number = 1001;
+    current_info.timestamp = current_timestamp + 2001_u64;
+    e.ledger().set(current_info);
 
     assert_eq!(
         contract.lender_available_to_claim(&lender),
