@@ -173,6 +173,13 @@ fn move_token(env: &Env, from: &Address, to: &Address, transfer_amount: i128) {
     token_client.transfer(&from, to, &transfer_amount);
 }
 
+fn contract_balance(env: &Env) -> i128 {
+    let token: Address = get_project_info(env).lend_token_address;
+    let token_client: token::TokenClient = token::Client::new(&env, &token);
+    let balance: i128 = token_client.balance(&env.current_contract_address());
+    balance
+}
+
 #[contractimpl]
 impl EnerDAOToken {
     pub fn initialize(e: Env, admin: Address, decimal: u32, name: String, symbol: String) {
@@ -304,8 +311,11 @@ impl EnerDAOToken {
         let available_to_claim = total_available_to_claim
             - already_claimed * (reward_rate + REWARD_DENOM) / REWARD_DENOM;
 
+        let contract_balance: i128 = contract_balance(&e);
         // Rounding issue
-        if available_to_claim == 1 {
+        if available_to_claim > contract_balance {
+            return contract_balance;
+        } else if available_to_claim == 1{
             return 0;
         } else {
             return available_to_claim;
@@ -324,11 +334,17 @@ impl EnerDAOToken {
 
         let target_not_reached: bool = Self::is_target_not_reached(&e);
 
-        let burn_amount: i128;
+        let mut burn_amount: i128;
         if target_not_reached {
             burn_amount = entitled_amount;
         } else {
             burn_amount = entitled_amount * REWARD_DENOM / (REWARD_DENOM + reward_rate);
+        }
+
+        let lender_balance: i128 = read_balance(&e, lender.clone());
+
+        if  burn_amount + 100 >= lender_balance {
+            burn_amount = lender_balance;
         }
 
         _burn(e.clone(), lender.clone(), burn_amount);
