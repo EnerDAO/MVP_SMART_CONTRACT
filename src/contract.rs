@@ -309,7 +309,7 @@ impl EnerDAOToken {
         let reward_rate: i128 = get_project_info(&e).reward_rate;
 
         let available_to_claim = total_available_to_claim
-            - already_claimed * (reward_rate + REWARD_DENOM) / REWARD_DENOM;
+            - already_claimed * (reward_rate*(REWARD_DENOM - PROTOCOL_FEE)/REWARD_DENOM + REWARD_DENOM) / REWARD_DENOM;
 
         let contract_balance: i128 = contract_balance(&e);
         // Rounding issue
@@ -338,7 +338,7 @@ impl EnerDAOToken {
         if target_not_reached {
             burn_amount = entitled_amount;
         } else {
-            burn_amount = entitled_amount * REWARD_DENOM / (REWARD_DENOM + reward_rate);
+            burn_amount = entitled_amount * REWARD_DENOM / (REWARD_DENOM + reward_rate*(REWARD_DENOM - PROTOCOL_FEE)/REWARD_DENOM);
         }
 
         let lender_balance: i128 = read_balance(&e, lender.clone());
@@ -436,8 +436,8 @@ impl EnerDAOToken {
         let project_info: ProjectInfo = get_project_info(&e);
         let reward_rate: i128 = project_info.reward_rate;
         let base_return: i128 = amount * REWARD_DENOM
-            / (REWARD_DENOM + reward_rate + reward_rate * PROTOCOL_FEE / REWARD_DENOM);
-        let protocol_fee: i128 = amount - base_return - base_return * reward_rate / REWARD_DENOM;
+            / (REWARD_DENOM + reward_rate);
+        let protocol_fee: i128 = base_return * (reward_rate * PROTOCOL_FEE / REWARD_DENOM) / REWARD_DENOM;
 
         let key_return: DataKey = DataKey::TotalReturn;
         let mut total_return: i128 = e.storage().persistent().get(&key_return).unwrap_or(0);
