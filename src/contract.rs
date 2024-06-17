@@ -449,6 +449,21 @@ impl EnerDAOToken {
         return String::from_str(e, "Available");
     }
 
+    
+    pub fn borrower_to_payback(e: &Env) -> i128 {
+        let project_info: ProjectInfo = get_project_info(e);
+        let reward_rate: i128 = project_info.reward_rate;
+
+        let key_return: DataKey = DataKey::TotalReturn;
+        let total_return: i128 = e.storage().persistent().get(&key_return).unwrap_or(0);
+
+        let key_fee: DataKey = DataKey::FeeAccumulated;
+        let total_fee: i128 = e.storage().persistent().get(&key_fee).unwrap_or(0);
+
+        let payback: i128 =  project_info.target_amount * (REWARD_DENOM + reward_rate) / REWARD_DENOM - (total_return + total_fee);
+
+        return payback;
+    }
 
     pub fn borrower_return(e: Env, borrower: Address, amount: i128) {
         borrower.require_auth();

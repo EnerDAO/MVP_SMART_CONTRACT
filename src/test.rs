@@ -215,7 +215,10 @@ fn test_borrower_return() {
     // assert_eq!(eurc_token.balance(&borrower), 2000_0000000i128);
     // assert_eq!(eurc_token.balance(&contract.address), 0);
 
+    assert_eq!(contract.borrower_to_payback(), 2200_0000000i128);
+
     contract.borrower_return(&borrower, &1100_0000000i128);
+    assert_eq!(contract.borrower_to_payback(), 1100_0000000i128);
     assert_eq!(contract.lender_available_to_claim(&lender), 545_0000000i128);
     assert_eq!(
         contract.lender_available_to_claim(&lender_2),
@@ -224,6 +227,7 @@ fn test_borrower_return() {
 
     eurc_token.mint(&borrower, &220_0000000i128);
     contract.borrower_return(&borrower, &1100_0000000i128);
+    assert_eq!(contract.borrower_to_payback(), 0);
     assert_eq!(
         contract.lender_available_to_claim(&lender),
         1090_0000000i128
@@ -301,8 +305,11 @@ fn test_rounding() {
     contract.borrower_claim();
     assert_eq!(eurc_token.balance(&borrower), 3000_0000000i128);
     assert_eq!(eurc_token.balance(&contract.address), 0);
+    
+    assert_eq!(contract.borrower_to_payback(), 3300_0000000i128);
 
     contract.borrower_return(&borrower, &1000_0000000i128);
+    assert_eq!(contract.borrower_to_payback(), 2300_0000000i128);
     assert_eq!(contract.lender_available_to_claim(&lender), 660_6060606);
     assert_eq!(contract.lender_available_to_claim(&lender_2), 330_3030303);
     assert_eq!(eurc_token.balance(&contract.address), 990_9090910); // return - protocol fee
