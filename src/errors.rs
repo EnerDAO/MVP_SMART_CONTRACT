@@ -14,5 +14,6 @@ pub enum Error {
     NoCollateral = 107,
     NothingToClaim = 108,
     AlreadyClaimed = 109,
+    ReturnOverreached = 110,
     NotAllowed = 120,
 }

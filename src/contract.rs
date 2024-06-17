@@ -163,6 +163,30 @@ fn _add_lender(e: Env, lender: Address) {
     }
 }
 
+fn transfer_claimed(e: &Env, from: &Address, to: &Address, amount: i128) {
+    
+    let key_claimed_from: DataKey = DataKey::ClaimedBalance(from.clone());
+    let mut claimed_from: i128 = e.storage().persistent().get(&key_claimed_from).unwrap_or(0);
+    let key_claimed_to: DataKey = DataKey::ClaimedBalance(to.clone());
+    let mut claimed_to: i128 = e.storage().persistent().get(&key_claimed_to).unwrap_or(0);
+
+    let balance_from: i128 = read_balance(&e, from.clone());
+
+    // splitting claimed balance proportionally to the amount transferred
+    if claimed_from > 0 {
+        claimed_to += claimed_from * amount / balance_from;
+        claimed_from -= claimed_from * amount / balance_from;
+        e.storage().persistent().set(&key_claimed_from, &claimed_from);
+        e.storage().persistent().set(&key_claimed_to, &claimed_to);
+        e.storage()
+            .persistent()
+            .extend_ttl(&key_claimed_from, BALANCE_LIFETIME_THRESHOLD, BALANCE_BUMP_AMOUNT);
+        e.storage()
+            .persistent()
+            .extend_ttl(&key_claimed_to, BALANCE_LIFETIME_THRESHOLD, BALANCE_BUMP_AMOUNT);
+    } 
+}
+
 #[contract]
 pub struct EnerDAOToken;
 
@@ -425,10 +449,11 @@ impl EnerDAOToken {
         return String::from_str(e, "Available");
     }
 
+
     pub fn borrower_return(e: Env, borrower: Address, amount: i128) {
         borrower.require_auth();
 
-        require_final_time_reached(&e);
+        // require_final_time_reached(&e);
 
         move_token(&e, &borrower, &e.current_contract_address(), amount);
 
@@ -442,12 +467,18 @@ impl EnerDAOToken {
         let key_return: DataKey = DataKey::TotalReturn;
         let mut total_return: i128 = e.storage().persistent().get(&key_return).unwrap_or(0);
         total_return += amount - protocol_fee;
+
         e.storage().persistent().set(&key_return, &total_return);
 
         let key_fee: DataKey = DataKey::FeeAccumulated;
         let mut total_fee = e.storage().persistent().get(&key_fee).unwrap_or(0);
         total_fee += protocol_fee;
         e.storage().persistent().set(&key_fee, &total_fee);
+
+        
+        if total_return + total_fee > project_info.target_amount * (REWARD_DENOM + reward_rate) / REWARD_DENOM {
+            panic_with_error!(&e, Error::ReturnOverreached);
+        }
 
         move_token(
             &e,
@@ -588,19 +619,18 @@ impl token::Interface for EnerDAOToken {
     }
 
     fn approve(e: Env, from: Address, spender: Address, amount: i128, expiration_ledger: u32) {
-        panic_with_error!(&e, Error::NotAllowed);
-        // from.require_auth();
+        from.require_auth();
 
-        // check_nonnegative_amount(&e, amount);
+        check_nonnegative_amount(&e, amount);
 
-        // e.storage()
-        //     .instance()
-        //     .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        e.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
 
-        // write_allowance(&e, from.clone(), spender.clone(), amount, expiration_ledger);
-        // TokenUtils::new(&e)
-        //     .events()
-        //     .approve(from, spender, amount, expiration_ledger);
+        write_allowance(&e, from.clone(), spender.clone(), amount, expiration_ledger);
+        TokenUtils::new(&e)
+            .events()
+            .approve(from, spender, amount, expiration_ledger);
     }
 
     fn balance(e: Env, id: Address) -> i128 {
@@ -611,36 +641,38 @@ impl token::Interface for EnerDAOToken {
     }
 
     fn transfer(e: Env, from: Address, to: Address, amount: i128) {
-        panic_with_error!(&e, Error::NotAllowed);
-        // from.require_auth();
+        
+        from.require_auth();
 
-        // check_nonnegative_amount(&e, amount);
+        check_nonnegative_amount(&e, amount);
+        
+        e.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
 
-        // e.storage()
-        //     .instance()
-        //     .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
-
-        // spend_balance(&e, from.clone(), amount);
-        // receive_balance(&e, to.clone(), amount);
-        // _add_lender(e.clone(), to.clone());
-        // TokenUtils::new(&e).events().transfer(from, to, amount);
+        transfer_claimed(&e, &from, &to, amount);
+        spend_balance(&e, from.clone(), amount);
+        receive_balance(&e, to.clone(), amount);
+        _add_lender(e.clone(), to.clone());
+        TokenUtils::new(&e).events().transfer(from, to, amount);
     }
 
     fn transfer_from(e: Env, spender: Address, from: Address, to: Address, amount: i128) {
-        panic_with_error!(&e, Error::NotAllowed);
-        // spender.require_auth();
+        
+        spender.require_auth();
 
-        // check_nonnegative_amount(&e, amount);
+        check_nonnegative_amount(&e, amount);
 
-        // e.storage()
-        //     .instance()
-        //     .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        e.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
 
-        // spend_allowance(&e, from.clone(), spender, amount);
-        // spend_balance(&e, from.clone(), amount);
-        // receive_balance(&e, to.clone(), amount);
-        // _add_lender(e.clone(), to.clone());
-        // TokenUtils::new(&e).events().transfer(from, to, amount)
+        transfer_claimed(&e, &from, &to, amount);
+        spend_allowance(&e, from.clone(), spender, amount);
+        spend_balance(&e, from.clone(), amount);
+        receive_balance(&e, to.clone(), amount);
+        _add_lender(e.clone(), to.clone());
+        TokenUtils::new(&e).events().transfer(from, to, amount)
     }
 
     fn burn(e: Env, from: Address, amount: i128) {

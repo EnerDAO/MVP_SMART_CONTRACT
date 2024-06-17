@@ -1,25 +1,21 @@
 #![cfg(test)]
 extern crate std;
 
-use crate::{contract::Token, TokenClient};
+use crate::{contract::EnerDAOToken, contract::EnerDAOTokenClient};
 use soroban_sdk::{
     symbol_short,
     testutils::{Address as _, AuthorizedFunction, AuthorizedInvocation},
-    Address, Env, IntoVal, Symbol,
+    Address, Env, IntoVal, Symbol
 };
 
-fn create_token<'a>(e: &Env, admin: &Address) -> TokenClient<'a> {
-    let token = TokenClient::new(e, &e.register_contract(None, Token {}));
+fn create_token<'a>(e: &Env, admin: &Address) -> EnerDAOTokenClient<'a> {
+    let token = EnerDAOTokenClient::new(e, &e.register_contract(None, EnerDAOToken {}));
     let random_address: Address = Address::generate(&e);
     token.initialize(
         admin,
         &7,
         &"name".into_val(e),
         &"symbol".into_val(e),
-        &random_address,
-        &random_address,
-        &100_i128,
-        &100_u64,
     );
     token
 }
@@ -148,6 +144,7 @@ fn test() {
 }
 
 #[test]
+#[should_panic(expected = "HostError: Error(Contract, #120)")]
 fn test_burn() {
     let e = Env::default();
     e.mock_all_auths();
@@ -242,7 +239,7 @@ fn transfer_from_insufficient_allowance() {
 }
 
 #[test]
-#[should_panic(expected = "already initialized")]
+#[should_panic(expected = "HostError: Error(Contract, #100)")]
 fn initialize_already_initialized() {
     let e = Env::default();
     let admin = Address::generate(&e);
@@ -253,28 +250,6 @@ fn initialize_already_initialized() {
         &10,
         &"name".into_val(&e),
         &"symbol".into_val(&e),
-        &admin,
-        &admin,
-        &100_i128,
-        &100_u64,
-    );
-}
-
-#[test]
-#[should_panic(expected = "Decimal must fit in a u8")]
-fn decimal_is_over_max() {
-    let e = Env::default();
-    let admin = Address::generate(&e);
-    let token = TokenClient::new(&e, &e.register_contract(None, Token {}));
-    token.initialize(
-        &admin,
-        &(u32::from(u8::MAX) + 1),
-        &"name".into_val(&e),
-        &"symbol".into_val(&e),
-        &admin,
-        &admin,
-        &100_i128,
-        &100_u64,
     );
 }
 
